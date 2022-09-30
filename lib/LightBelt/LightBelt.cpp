@@ -66,8 +66,9 @@ void LightBelt::ajustLuminance(int8_t delta_luminance) {
 
 void LightBelt::loop() {
     switch(state) {
-        uint8_t addminus;
+        int8_t addminus;
         case PENDING_ON:
+            if (this->getOnOff()) break;
             if (this->luminance <= 0) this->luminance = 255;
             for (uint8_t i = 0; i < this->luminance; i++)
             {
@@ -103,6 +104,10 @@ void LightBelt::loop() {
             this->state = IDLE;
             break;
         case PENDING_SET_LUMINANCE:
+            if (!this->getOnOff()){ 
+                this->luminance = this->new_luminance;
+                break;
+            }
             addminus = this->new_luminance > this->luminance ? 1 : -1;
             for (uint8_t i = this->luminance; addminus > 0 ? i<new_luminance : i>new_luminance; i += addminus)
             {

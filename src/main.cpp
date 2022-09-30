@@ -6,9 +6,9 @@
 
 // MQTT Broker
 const char *mqtt_broker = "192.168.50.230";
-const char *topic_get_onoff = "home/bedroom/light/0000/status";
+const char *topic_state_onoff = "home/bedroom/light/0000/status";
 const char *topic_set_onoff = "home/bedroom/light/0000/switch";
-const char *topic_get_brightness = "home/bedroom/light/0000/brightness";
+const char *topic_state_brightness = "home/bedroom/light/0000/brightness";
 const char *topic_set_brightness = "home/bedroom/light/0000/brightness/set";
 
 // LIGHT
@@ -81,8 +81,8 @@ void reconnect() {
         // Attempt to connect
         if (client.connect(client_id.c_str())) {
             Serial.println("connected");
-            client.subscribe(topic_get_onoff);
-            client.subscribe(topic_get_brightness);
+            client.subscribe(topic_set_onoff);
+            client.subscribe(topic_set_brightness);
         } else {
             Serial.print("failed with state ");
             Serial.println(client.state());
@@ -94,14 +94,15 @@ void onoffCallback(bool onoff) {
     char ch[4];
     Serial.print("Onoff callback.\n");
     if (!client.connected()) reconnect();
-    client.publish(topic_set_onoff, itoa(Light.getLuminance(), ch, 10));
+    client.publish(topic_state_onoff, Light.getOnOff() ? "ON" : "OFF");
+    client.publish(topic_state_brightness, itoa(Light.getLuminance(), ch, 10));
 }
 
 void luminanceCallback(uint8_t luminance) {
     char ch[4];
     Serial.print("Luminance callback.\n");
     if (!client.connected()) reconnect();
-    client.publish(topic_set_brightness, itoa(Light.getLuminance(), ch, 10));
+    if (Light.getOnOff()) client.publish(topic_state_brightness, itoa(Light.getLuminance(), ch, 10));
 }
 
 void setup() {
@@ -124,6 +125,7 @@ void setup() {
 
     // Init MQTT
     client.setServer(mqtt_broker, atoi(mqtt_port));
+    Serial.print(mqtt_broker);Serial.println(atoi(mqtt_port));
     client.setCallback(callback);
     Serial.println("MQTT init.");
 
