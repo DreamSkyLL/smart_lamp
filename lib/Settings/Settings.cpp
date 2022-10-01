@@ -28,8 +28,7 @@ bool Settings::begin()
                 this->loadSuccess = true;
             }
         }
-    }
-    
+    }    
     return this->loadSuccess;
 }
 

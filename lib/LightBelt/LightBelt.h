@@ -16,7 +16,7 @@ typedef void luminanceFeedback(uint8_t);
 class LightBelt
 {
 private:
-    int16_t luminance=255, new_luminance;
+    int16_t luminance=0, new_luminance;
     uint8_t pin_warm, pin_cold;
     bool onoff;
     uint8_t state = DEAD;
