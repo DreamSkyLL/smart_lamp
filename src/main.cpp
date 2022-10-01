@@ -3,9 +3,9 @@
 #include <PubSubClient.h>
 #include <WiFiManager.h>
 #include "LightBelt.h"
+#include "Settings.h"
 
 // MQTT Broker
-const char *mqtt_broker = "192.168.50.230";
 const char *topic_state_onoff = "home/bedroom/light/0000/status";
 const char *topic_set_onoff = "home/bedroom/light/0000/switch";
 const char *topic_state_brightness = "home/bedroom/light/0000/brightness";
@@ -27,11 +27,15 @@ WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
 bool switch_flag = false;
 uint8_t timer = 0;
 uint32_t clicktime = 0;
+bool shouldSaveConfig = false;
+
+Settings MySettings;
 WiFiManager wifiManager;
 WiFiClient wifiClient;
 PubSubClient client(wifiClient);
 LightBelt Light;
 
+//
 IRAM_ATTR void ClockChanged() {
     if (digitalRead(SUB_PIN) == HIGH) { 
         if (digitalRead(ADD_PIN) == LOW) Light.ajustLuminance(4);
@@ -43,15 +47,19 @@ IRAM_ATTR void ClockChanged() {
     timer = 0;
 }
 
-// SW
+// SW Interrupt
 IRAM_ATTR void SwitchChanged() {
     if (digitalRead(SWITCH_PIN) == LOW) {
         clicktime = millis();
         switch_flag = true;
         while(digitalRead(SWITCH_PIN) == LOW);
-        // Light.switchOnOff();
     }
     timer = 0;
+}
+
+// WiFiManager save config callback
+void saveConfigCallback() {
+    shouldSaveConfig = true;
 }
 
 // MQTT callback
@@ -76,17 +84,17 @@ void callback(char *topic, byte *payload, unsigned int length) {
 
 // MQTT reconnect
 void reconnect() {
-        String client_id = "esp8266-client-" + String(WiFi.macAddress());
-        Serial.printf("Trying to reconnect MQTT server, result: ");
-        // Attempt to connect
-        if (client.connect(client_id.c_str())) {
-            Serial.println("connected");
-            client.subscribe(topic_set_onoff);
-            client.subscribe(topic_set_brightness);
-        } else {
-            Serial.print("failed with state ");
-            Serial.println(client.state());
-        }
+    String client_id = "esp8266-client-" + String(WiFi.macAddress());
+    Serial.printf("Trying to reconnect MQTT server, result: ");
+    // Attempt to connect
+    if (client.connect(client_id.c_str())) {
+        Serial.println("connected");
+        client.subscribe(topic_set_onoff);
+        client.subscribe(topic_set_brightness);
+    } else {
+        Serial.print("failed with state ");
+        Serial.println(client.state());
+    }
 }
 
 // 
@@ -110,22 +118,25 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Serial init.");
 
+    // Init Settings
+    MySettings.begin();
+    MySettings.load(mqtt_server, mqtt_port);
+    Serial.printf("Setting server: %s, Setting port: %s.\n", mqtt_server, mqtt_port);
+
     // Init WiFi
-    // WiFi.mode(WIFI_STA);
-    // WiFi.setAutoReconnect(true);
-    // WiFi.persistent(true);
-    // WiFi.setPhyMode(WIFI_PHY_MODE_11B);
-    // WiFi.begin(ssid, password);
+    wifiManager.setSaveConfigCallback(saveConfigCallback);
     wifiManager.addParameter(&custom_mqtt_server);
     wifiManager.addParameter(&custom_mqtt_port);
-    //  wifiManager.resetSettings();
-    wifiManager.setTimeout(30);
+    wifiManager.setTimeout(60);
     wifiManager.autoConnect("AutoConnectAP");
+    strcpy(mqtt_server, custom_mqtt_server.getValue());
+    strcpy(mqtt_port, custom_mqtt_port.getValue());
     Serial.println("WiFi init.");
+    if (shouldSaveConfig) MySettings.update(mqtt_server, mqtt_port);
 
     // Init MQTT
-    client.setServer(mqtt_broker, atoi(mqtt_port));
-    Serial.print(mqtt_broker);Serial.println(atoi(mqtt_port));
+    client.setServer(mqtt_server, atoi(mqtt_port));
+    Serial.print(mqtt_server);Serial.println(atoi(mqtt_port));
     client.setCallback(callback);
     Serial.println("MQTT init.");
 
@@ -137,16 +148,18 @@ void setup() {
     pinMode(ADD_PIN, INPUT);
     Serial.println("Init finished.");
 
-    // Init Interrupt
+    // Attach interrupt
     attachInterrupt(SUB_PIN, ClockChanged, CHANGE);
     attachInterrupt(SWITCH_PIN, SwitchChanged, FALLING);
+
+    
 }
 
 void loop() {
     client.loop();
     Light.loop();
     
-
+    // Delay pub MQTT
     if (timer > 90 && timer < 100) {
         Light.setLuminance(Light.getLuminance());
         timer = 100;
@@ -154,7 +167,7 @@ void loop() {
         timer = 100;
     }
 
-    
+    // Long press
     if (millis() - clicktime > 5000 && switch_flag) {
         switch_flag = false;
         wifiManager.resetSettings();
