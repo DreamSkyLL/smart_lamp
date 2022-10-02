@@ -81,6 +81,7 @@ void LightBelt::loop() {
             this->state = IDLE;
             break;
         case PENDING_OFF:
+            if (!this->getOnOff()) break;
             for (uint8_t i = this->luminance; i > 0; i--)
             {
                 analogWrite(pin_warm, i);
