@@ -15,6 +15,7 @@ const char *topic_set_onoff = "home/bedroom/light/0000/switch";
 const char *topic_state_brightness = "home/bedroom/light/0000/brightness";
 const char *topic_set_brightness = "home/bedroom/light/0000/brightness/set";
 const char *topic_set_timedtask = "home/bedroom/light/0000/timedtask/set";
+const char *topic_remove_timedtask = "home/bedroom/light/0000/timedtask/remove";
 
 // LIGHT
 const uint8_t SWITCH_PIN = 12;
@@ -89,7 +90,17 @@ void taskOff()
 // WiFiManager save config callback
 void saveConfigCallback()
 {
-    shouldSaveConfig = true;
+    strcpy(mqtt_server, custom_mqtt_server.getValue());
+    strcpy(mqtt_port, custom_mqtt_port.getValue());
+    MySettings.update(mqtt_server, mqtt_port);
+
+    // Init MQTT
+    client.setServer(mqtt_server, atoi(mqtt_port));
+    client.subscribe(topic_set_onoff);
+    client.subscribe(topic_set_brightness);
+    client.subscribe(topic_set_timedtask);
+    client.subscribe(topic_remove_timedtask);
+    Serial.printf("MQTT init: %s, %d\n", mqtt_server, atoi(mqtt_port));
 }
 
 // MQTT callback
@@ -124,23 +135,27 @@ void callback(char *topic, byte *payload, unsigned int length)
             if (PERIODIC == int(obj["type"]))
             {
                 String value = obj["val"];
-                Serial.println("In periodic");
                 if (value.length() == 2)
-                    timedTask.addTask(Task(taskOn, PERIODIC, time_t(obj["time"]), time_t(obj["interval"])));
+                    timedTask.addTask(Task(taskOn, uint16_t(obj["id"]), PERIODIC, time_t(obj["time"]), time_t(obj["interval"])));
                 else if (value.length() == 3)
-                    timedTask.addTask(Task(taskOff, PERIODIC, time_t(obj["time"]), time_t(obj["interval"])));
+                    timedTask.addTask(Task(taskOff, uint16_t(obj["id"]), PERIODIC, time_t(obj["time"]), time_t(obj["interval"])));
             }
             else if (DISPOSABLE == int(obj["type"]))
             {
                 String value = obj["val"];
-                Serial.println("In disposable");
-                Serial.println(time_t(obj["time"]));
                 if (value.length() == 2)
-                    timedTask.addTask(Task(taskOn, DISPOSABLE, time_t(obj["time"])));
+                    timedTask.addTask(Task(taskOn, uint16_t(obj["id"]), DISPOSABLE, time_t(obj["time"])));
                 else if (value.length() == 3)
-                    timedTask.addTask(Task(taskOff, DISPOSABLE, time_t(obj["time"])));
+                    timedTask.addTask(Task(taskOff, uint16_t(obj["id"]), DISPOSABLE, time_t(obj["time"])));
             }
         }
+    }
+    else if (strcmp(topic, topic_remove_timedtask) == 0)
+    {
+        char *p = new char[length];
+        memcpy(p, payload, length);
+        Serial.print(atoi(p));
+        timedTask.deleteTask(uint16_t((atoi(p))));
     }
     Serial.printf("Message: %s\n", payload);
 }
@@ -157,6 +172,7 @@ void reconnect()
         client.subscribe(topic_set_onoff);
         client.subscribe(topic_set_brightness);
         client.subscribe(topic_set_timedtask);
+        client.subscribe(topic_remove_timedtask);
     }
     else
     {
@@ -194,16 +210,15 @@ void setup()
     Serial.println("Serial init.");
 
     // Init WiFi
-    wifiManager.setSaveConfigCallback(saveConfigCallback);
     wifiManager.addParameter(&custom_mqtt_server);
     wifiManager.addParameter(&custom_mqtt_port);
+    wifiManager.setConfigPortalBlocking(false);
+    wifiManager.setSaveParamsCallback(saveConfigCallback);
     wifiManager.setTimeout(60);
     wifiManager.autoConnect("AutoConnectAP");
-    strcpy(mqtt_server, custom_mqtt_server.getValue());
-    strcpy(mqtt_port, custom_mqtt_port.getValue());
     Serial.println("WiFi init.");
-    if (shouldSaveConfig)
-        MySettings.update(mqtt_server, mqtt_port);
+    // if (shouldSaveConfig)
+    //     MySettings.update(mqtt_server, mqtt_port);
 
     // Init Settings
     MySettings.begin();
@@ -213,6 +228,10 @@ void setup()
     // Init MQTT
     client.setServer(mqtt_server, atoi(mqtt_port));
     client.setCallback(callback);
+    client.subscribe(topic_set_onoff);
+    client.subscribe(topic_set_brightness);
+    client.subscribe(topic_set_timedtask);
+    client.subscribe(topic_remove_timedtask);
     Serial.printf("MQTT init: %s, %d\n", mqtt_server, atoi(mqtt_port));
 
     // Init light
@@ -237,6 +256,7 @@ void loop()
     Light.loop();
     timedTask.loop();
     timeClient.update();
+    wifiManager.process();
 
     // Delay pub MQTT
     if (timer > 90 && timer < 100)
@@ -254,6 +274,7 @@ void loop()
     {
         switch_flag = false;
         wifiManager.resetSettings();
+        MySettings.format();
         ESP.reset();
     }
     else if (switch_flag)

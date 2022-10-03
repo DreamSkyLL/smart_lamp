@@ -17,16 +17,18 @@ class Task
 private:
     TaskCallback *task;
     bool active;
+    uint16_t id;
 public:
     uint8_t type;
     time_t trigger_time;
     time_t interval;
 
     Task();
-    Task(TaskCallback *task, uint8_t type, time_t trigger_time);
-    Task(TaskCallback *task, uint8_t type, time_t start_time, time_t interval);
+    Task(TaskCallback *task, uint16_t id, uint8_t type, time_t trigger_time);
+    Task(TaskCallback *task, uint16_t id, uint8_t type, time_t start_time, time_t interval);
     ~Task();
     void run();
+    uint16_t getID();
     void update();
     bool shouldRemove();
 };
@@ -43,7 +45,7 @@ public:
     TimedTask(NTPClient timeClient);
     ~TimedTask();
     void addTask(Task task);
-    void deleteTask(uint8_t index);
+    void deleteTask(uint16_t id);
     void loop();
 };
 

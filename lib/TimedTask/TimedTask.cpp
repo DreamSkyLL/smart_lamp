@@ -1,12 +1,16 @@
 #include "TimedTask.h"
 Task::Task() {}
-Task::Task(TaskCallback *task, uint8_t type, time_t trigger_time) : task(task), type(type), trigger_time(trigger_time) {}
-Task::Task(TaskCallback *task, uint8_t type, time_t start_time, time_t interval) : task(task), type(type), trigger_time(start_time), interval(interval) {}
+Task::Task(TaskCallback *task, uint16_t id, uint8_t type, time_t trigger_time) : id(id), task(task), type(type), trigger_time(trigger_time) {}
+Task::Task(TaskCallback *task, uint16_t id, uint8_t type, time_t start_time, time_t interval) : id(id), task(task), type(type), trigger_time(start_time), interval(interval) {}
 Task::~Task() {}
 
 void Task::run()
 {
     this->task();
+}
+
+uint16_t Task::getID() {
+    return this->id;
 }
 
 void Task::update()
@@ -41,15 +45,21 @@ void TimedTask::addTask(Task task)
     this->tasks.add(task);
 }
 
-void TimedTask::deleteTask(uint8_t index)
+void TimedTask::deleteTask(uint16_t id)
 {
-    this->tasks.remove(index);
+    for (uint8_t i = 0; i < this->tasks.size(); i++)
+    {
+        Task task = tasks.shift();
+        // Serial.printf("task id: %d, mqtt id: %d\n", )
+        if (task.getID() != id)
+            tasks.add(task);
+    }
 }
 
 void TimedTask::loop()
 {
     this->count++;
-    if (this->count < 200)
+    if (this->count < 250)
         return;
     timeClient.update();
     for (uint8_t i = 0; i < this->tasks.size(); i++)

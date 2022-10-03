@@ -15,6 +15,7 @@ public:
     bool init();
     bool begin();
     void load(char* mqtt_server, char* mqtt_port);
+    void format();
     bool update(const char*, const char*);
 };
 
